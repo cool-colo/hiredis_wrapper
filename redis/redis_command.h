@@ -11,23 +11,81 @@
 
 using RCommands = std::vector<std::string>;
 
+template <typename T>
+struct CommandBuildHelper{
+    static void Build (RCommands& commands, const T& data){
+        std::ostringstream stringStream;
+        stringStream << data;
+        commands.push_back(stringStream.str());
+    }
+};
+
+template <typename T>
+struct CommandBuildHelper<std::vector<T>>{
+    static void Build (RCommands& commands, const std::vector<T>& data){
+        std::ostringstream stringStream;
+        std::for_each(std::begin(data), std::end(data), [&](const T& element){ 
+                             stringStream.str("");
+                             stringStream << element;
+                             commands.push_back(stringStream.str());
+                         }
+                     );
+    }
+};
+
+template<typename FirstType, typename SecondType>
+struct CommandBuildHelper<std::vector<std::pair<FirstType, SecondType>>>{
+    static void Build (RCommands& commands, const std::vector<std::pair<FirstType, SecondType>>& data){
+        std::ostringstream stringStream;
+        std::for_each(std::begin(data), std::end(data), [&](const std::pair<FirstType, SecondType>& element){ 
+                             stringStream.str("");
+                             stringStream << element.first;
+                             commands.push_back(stringStream.str());
+
+                             stringStream.str("");
+                             stringStream << element.second;
+                             commands.push_back(stringStream.str());
+                         }
+                     );
+    }
+};
+
+template<typename KeyType, typename ValueType>
+struct CommandBuildHelper<std::unordered_map<KeyType,ValueType>>{
+    static void Build (RCommands& commands, const std::unordered_map<KeyType,ValueType>& data){
+        std::ostringstream stringStream;
+        std::for_each(std::begin(data), std::end(data), [&](const std::pair<KeyType, ValueType>& element){ 
+                             stringStream.str("");
+                             stringStream << element.first;
+                             commands.push_back(stringStream.str());
+
+                             stringStream.str("");
+                             stringStream << element.second;
+                             commands.push_back(stringStream.str());
+                         }
+                     );
+    }
+};
+
 struct CommandBuilder
 {
+    template <typename ... ARGS>
+    CommandBuilder(ARGS&& ... args){
+        std::vector<bool> list = {(this->operator<<(std::forward<ARGS>(args)), true)...};
+        (void)list;
+    }
+
     template <typename T>
     CommandBuilder& operator << (const T& data)
-    {
-        stringStream.str("");
-        stringStream <<data;
-        commands.push_back(stringStream.str());
-        return *this;   
+    { 
+        CommandBuildHelper<T>::Build(commands, data);
+        return *this;
     }
 
     RCommands get()
     {
         return std::move(commands);
     }
-
-    std::ostringstream stringStream;
     RCommands commands;
 };
 
@@ -52,73 +110,55 @@ struct set
     template<typename T>
     RCommands operator()(const std::string& key, const T& value)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value;
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value}.get();
     }
 
     template<typename T, typename ET>
     RCommands operator()(const std::string& key, const T& value, EX&&, ET expires_in)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << "EX" << value << expires_in;
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, "EX", value, expires_in}.get();
     }
 
     template<typename T, typename PT>
     RCommands operator()(const std::string& key, const T& value, PX&&, PT expires_in)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << "PX" << value << expires_in;
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, "PX", value, expires_in}.get();
     }
 
     template<typename T>
     RCommands operator()(const std::string& key, const T& value, NX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "NX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "NX"}.get();
     }
 
     template<typename T>
     RCommands operator()(const std::string& key, const T& value, XX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "XX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "XX"}.get();
     }
 
     template<typename T, typename ET>
     RCommands operator()(const std::string& key, const T& value, EX&&, ET expires_in, NX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "EX" << expires_in << "NX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "EX", expires_in, "NX"}.get();
     }
 
     template<typename T, typename ET>
     RCommands operator()(const std::string& key, const T& value, EX&&, ET expires_in, XX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "EX" << expires_in << "XX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "EX", expires_in, "XX"}.get();
     }
 
     template<typename T, typename PT>
     RCommands operator()(const std::string& key, const T& value, PX&&, PT expires_in, NX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "PX" << expires_in << "NX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "PX", expires_in, "NX"}.get();
     }
 
     template<typename T, typename PT>
     RCommands operator()(const std::string& key, const T& value, PX&&, PT expires_in, XX&&)
     {
-          CommandBuilder command_builder;
-          command_builder << "SET" << key << value << "PX" << expires_in << "XX";
-          return std::move(command_builder.get());
+        return CommandBuilder{"SET", key, value, "PX", expires_in, "XX"}.get();
     }
 };
 
@@ -127,9 +167,7 @@ struct get
     template<typename T>
     RCommands operator()(const std::string& key)
     {
-          CommandBuilder command_builder;
-          command_builder << "get" << key;
-          return std::move(command_builder.get());
+        return CommandBuilder{"GET", key}.get();
     }
 };
 
@@ -138,13 +176,7 @@ struct sadd
     template<typename T>
     RCommands operator()(const std::string& key, const std::vector<T>& members)
     {
-        CommandBuilder command_builder;
-        command_builder << "SADD" << key;
-        for (const auto& member : members)
-        {
-          command_builder << member;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"SADD", key, members}.get();
     }
 
     template<typename T>
@@ -162,9 +194,7 @@ struct sismember
     template<typename T>
     RCommands operator()(const std::string& key, const T& member)
     {
-        CommandBuilder command_builder;
-        command_builder << "SISMEMBER" << key << member;
-        return std::move(command_builder.get());
+        return CommandBuilder{"SISMEMBER", key, member}.get();
     }
 };
 
@@ -172,22 +202,16 @@ struct sismember
 struct zrem
 {
     template<typename T>
-    RCommands operator()(const std::string& key, const std::vector<T>& container)
+    RCommands operator()(const std::string& key, const std::vector<T>& members)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREM" << key;
-        for (const auto& member : container)
-        {
-          command_builder << member;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREM", key, members}.get();
     }
 
     template<typename T>
     RCommands operator()(const std::string& key, const T& val)
     {
-        std::vector<T> container{{val}};
-        return operator()(key, container);
+        std::vector<T> members{{val}};
+        return operator()(key, members);
     }
   
 };
@@ -197,24 +221,16 @@ struct zcard
 {
     RCommands operator()(const std::string& key)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZCARD" << key;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZCARD", key}.get();
     }
 };
 
 struct zadd
 {
-    template<typename MemberType, typename ScoreType>
-    RCommands operator()(const std::string& key, const std::vector<std::pair<MemberType, ScoreType>>& members)
+    template<typename ScoreType, typename MemberType>
+    RCommands operator()(const std::string& key, const std::vector<std::pair<ScoreType, MemberType>>& members)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZADD" << key;
-        for (const auto& member : members)
-        {
-            command_builder << member.second << member.first;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZADD", key, members}.get();
     }
     template<typename MemberType, typename ScoreType>
     RCommands operator()(const std::string& key, const std::unordered_map<MemberType, ScoreType>& members)
@@ -228,12 +244,11 @@ struct zadd
         return std::move(command_builder.get());
     }
 
-    template<typename MemberType, typename ScoreType>
-    RCommands operator()(const std::string& key, const MemberType& value, const ScoreType& score)
+    template<typename ScoreType, typename MemberType>
+    RCommands operator()(const std::string& key, const ScoreType& score, const MemberType& value)
     {       
-        std::vector<std::pair<MemberType, ScoreType>> members = {{value, score}};
+        std::vector<std::pair<ScoreType, MemberType>> members = {{score, value}};
         return operator()(key, members);
-
     }
 };
 
@@ -243,20 +258,14 @@ struct lpush
     template<typename T>
     RCommands operator()(const std::string& key, const std::vector<T>& values)
     {
-        CommandBuilder command_builder;
-        command_builder << "LPUSH" << key;
-        for (const auto& value : values) {
-            command_builder << value;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"LPUSH", key, values}.get();
     }
 
     template<typename T>
     RCommands operator()(const std::string& key, const T& value)
     {       
-        std::vector<T> container{{value}};
-        return operator()(key, container);
-
+        std::vector<T> members{{value}};
+        return operator()(key, members);
     }
 };
 
@@ -269,9 +278,7 @@ struct zrevrange<false>
 {
     RCommands operator()(const std::string& key, int start, int stop)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGE" << key << start << stop;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGE", key, start, stop}.get();
     }
 };
 
@@ -281,9 +288,7 @@ struct zrevrange<true>
 {
     RCommands operator()(const std::string& key, int start, int stop)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGE" << key << start << stop << "WITHSCORES";
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGE", key, start, stop, "WITHSCORES"}.get();
     }
 
 };
@@ -297,17 +302,12 @@ struct zrevrangebyscore<false>
     
     RCommands operator()(const std::string& key, const std::string& max, const std::string& min)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGEBYSCORE" << key << max <<min;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGEBYSCORE", key, max, min}.get();
     }
 
     RCommands operator()(const std::string& key, const std::string& max, const std::string& min, int offset, int count)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGEBYSCORE" << key << max << min;
-        command_builder << "LIMIT" << offset << count;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGEBYSCORE", key, max, min, "LIMIT", offset, count}.get();
     }
 };
 
@@ -317,17 +317,12 @@ struct zrevrangebyscore<true>
     
     RCommands operator()(const std::string& key, const std::string& max, const std::string& min)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGEBYSCORE" << key << max << min << "WITHSCORES";
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGEBYSCORE", key, max, min, "WITHSCORES"}.get();
     }
 
     RCommands operator()(const std::string& key, const std::string& max, const std::string& min, int offset, int count)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZREVRANGEBYSCORE" << key << max << min << "WITHSCORES";
-        command_builder << "LIMIT" << offset << count;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZREVRANGEBYSCORE", key, max, min, "WITHSCORES", "LIMIT", offset, count}.get();
     }
 };
 
@@ -340,17 +335,12 @@ struct zrangebyscore<false>
 {
     RCommands operator()(const std::string& key, const std::string& min, const std::string& max)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZRANGEBYSCORE" << key << min <<max;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZRANGEBYSCORE", key, min, max}.get();
     }
 
     RCommands operator()(const std::string& key, const std::string& min, const std::string& max, int offset, int count)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZRANGEBYSCORE" << key << min << max;
-        command_builder << "LIMIT" << offset << count;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZRANGEBYSCORE", key, min, max, "LIMIT", offset, count}.get();
     }
 };
 
@@ -359,17 +349,12 @@ struct zrangebyscore<true>
 {
     RCommands operator()(const std::string& key, const std::string& min, const std::string& max)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZRANGEBYSCORE" << key << min << max << "WITHSCORES";
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZRANGEBYSCORE", key, min, max, "WITHSCORES"}.get();
     }
 
     RCommands operator()(const std::string& key, const std::string& min, const std::string& max, int offset, int count)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZRANGEBYSCORE" << key << min << max << "WITHSCORES";
-        command_builder << "LIMIT" << offset << count;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count}.get();
     }
 };
 
@@ -380,11 +365,8 @@ struct zincrby
     template<typename ElemType, typename ScoreType>
     RCommands operator()(const std::string& key, const ElemType& memeber, const ScoreType& increment)
     {
-        CommandBuilder command_builder;
-        command_builder << "ZINCRBY" << key << increment <<memeber;
-        return std::move(command_builder.get());
+        return CommandBuilder{"ZINCRBY", key, increment, memeber}.get();
     }
-
 };
 
 struct hmset
@@ -392,25 +374,13 @@ struct hmset
     template<typename FieldType, typename ValueType>
     RCommands operator()(const std::string& key, const std::vector<std::pair<FieldType,ValueType>>& avps)
     {
-        CommandBuilder command_builder;
-        command_builder << "HMSET" << key;
-        for (const auto& avp : avps)
-        {
-            command_builder << avp.first << avp.second;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"HMSET", key, avps}.get();
     }
 
     template<typename FieldType, typename ValueType>
     RCommands operator()(const std::string& key, const std::unordered_map<FieldType,ValueType>& avps)
     {
-        CommandBuilder command_builder;
-        command_builder << "HMSET" << key;
-        for (const auto& avp : avps)
-        {
-            command_builder << avp.first <<avp.second;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"HMSET", key, avps}.get();
     }
 };
 
@@ -420,13 +390,7 @@ struct hmget
     template<typename FieldType>
     RCommands operator()(const std::string& key, const std::vector<FieldType>& fields)
     {
-        CommandBuilder command_builder;
-        command_builder << "HMGET" << key;
-        for (const auto& field : fields)
-        {
-          command_builder << field;
-        }
-        return std::move(command_builder.get());
+        return CommandBuilder{"HMSET", key, fields}.get();
     }
 };
 
@@ -435,9 +399,7 @@ struct expire
 {
     RCommands operator()(const std::string& key, long seconds)
     {
-        CommandBuilder command_builder;
-        command_builder << "EXPIRE" << key << seconds;;
-        return std::move(command_builder.get());
+        return CommandBuilder{"EXPIRE", key, seconds}.get();
     }
 };
 
@@ -445,9 +407,7 @@ struct expireat
 {
     RCommands operator()(const std::string& key, long timestamp)
     {
-        CommandBuilder command_builder;
-        command_builder << "EXPIREAT" << key << timestamp;
-        return std::move(command_builder.get());
+        return CommandBuilder{"EXPIREAT", key, timestamp}.get();
     }
 };
 
@@ -457,12 +417,7 @@ struct eval
     template <typename ... ARGS>
     RCommands operator()(const std::string& script, ARGS&& ... args)
     {   
-        CommandBuilder command_builder;
-        [](...){} ((command_builder<<std::forward<ARGS>(args),0)...);
-        command_builder << script << "EVAL";
-        auto cmd = command_builder.get();
-        std::reverse(cmd.begin(), cmd.end());
-        return std::move(cmd);
+        return CommandBuilder{"EVAL", script, std::forward<ARGS>(args)...}.get();
     }
 };
 
